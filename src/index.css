@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-serif: "Instrument Serif", serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+:root {
+  --ink: #0A0A0A;
+  --paper: #FAFAF8;
+  scroll-behavior: auto;
+}
+
+html {
+  scroll-behavior: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #0A0A0A #FAFAF8;
+  scrollbar-gutter: stable;
+}
+
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  overflow-x: hidden;
+}
+
+/* custom scrollbar webkit */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #FAFAF8; }
+::-webkit-scrollbar-thumb { background: #0A0A0A; border-radius: 999px; }
+
+/* selection */
+::selection { background: #0A0A0A; color: #FAFAF8; }
+
+/* yin-yang spin (CSS em vez de JS: mesma rotação 36s, sem custo por frame) */
+@keyframes yy-spin { to { transform: rotate(360deg); } }
+.yy-spin { animation: yy-spin 36s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
