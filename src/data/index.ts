@@ -49,14 +49,14 @@ export const stackGroups = [
     items: ["Python", "Go", "TypeScript", "JavaScript", "Rust — familiaridade"],
   },
   {
+    label: "Backend",
+    yin: "Sistema",
+    items: ["FastAPI", "Flask", "REST APIs", "Auth & RBAC", "Redis"],
+  },
+  {
     label: "Frontend",
     yin: "Interface",
     items: ["React", "Vue.js", "Tailwind", "HTML/CSS"],
-  },
-  {
-    label: "Backend",
-    yin: "Sistema",
-    items: ["FastAPI", "Flask", "REST APIs", "Auth & RBAC", "Redis Streams"],
   },
   {
     label: "Dados & IA",

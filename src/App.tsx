@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react"
-import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence } from "motion/react"
+import { Fragment, useEffect, useRef, useState } from "react"
+import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence, useMotionValue } from "motion/react"
 import Lenis from "lenis"
 import { experiences, stackGroups, projects, education } from "./data"
 
@@ -7,9 +7,10 @@ import { experiences, stackGroups, projects, education } from "./data"
 // NOTA: rotação via CSS (.yy-spin, 36s linear infinite) em vez de motion —
 // visual idêntico, porém GPU-composite sem JS por frame (eram ~15 loops JS).
 function YinYang({ size = 200, className = "", animate = true, stroke = false }: { size?: number; className?: string; animate?: boolean; stroke?: boolean }) {
+  const sizeProps = size ? { width: size, height: size } : {}
   return (
     <svg
-      width={size} height={size} viewBox="0 0 200 200" className={`${className}${animate ? " yy-spin" : ""}`}
+      {...sizeProps} viewBox="0 0 200 200" className={`${className}${animate ? " yy-spin" : ""}`}
       style={{ overflow: "visible" }}
     >
       {/* base */}
@@ -27,13 +28,76 @@ function YinYang({ size = 200, className = "", animate = true, stroke = false }:
 }
 
 function YinYangOutline({ size = 200, className = "" }: { size?: number; className?: string }) {
+  // reservado p/ usos futuros (ghost/outline de seções)
   return (
-    <svg width={size} height={size} viewBox="0 0 200 200" className={className} style={{ overflow: "visible" }}>
+    <svg width={size} height={size} viewBox="0 0 200 200" className={className} style={{ overflow: "visible" }} aria-hidden>
       <circle cx="100" cy="100" r="98" fill="none" stroke="currentColor" strokeWidth="1" opacity={0.14} />
       <path d="M100 2 A98 98 0 0 1 100 198 A49 49 0 0 1 100 100 A49 49 0 0 0 100 2" fill="none" stroke="currentColor" strokeWidth="1" opacity={0.14} />
       <circle cx="100" cy="51" r="22" fill="none" stroke="currentColor" strokeWidth="1" opacity={0.14} />
       <circle cx="100" cy="149" r="22" fill="none" stroke="currentColor" strokeWidth="1" opacity={0.14} />
     </svg>
+  )
+}
+void YinYangOutline // mantém TS feliz sem deletar o helper
+
+// ── Yin Yang Planet — 3D CSS puro (sem libs) ──────────────────
+// Planeta inclinado (rotateX) girando no próprio eixo + 2 anéis em
+// planos diferentes orbitando. Tilt reativo ao mouse via springs.
+function YinYangPlanet() {
+  const ref = useRef<HTMLDivElement>(null)
+  const rx = useSpring(useMotionValue<number>(0), { stiffness: 60, damping: 18 })
+  const ry = useSpring(useMotionValue<number>(0), { stiffness: 60, damping: 18 })
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    const onMove = (e: MouseEvent) => {
+      const r = el.getBoundingClientRect()
+      const dx = (e.clientX - (r.left + r.width / 2)) / window.innerWidth
+      const dy = (e.clientY - (r.top + r.height / 2)) / window.innerHeight
+      ry.set(dx * 22)   // mouse → esquerda/direita inclina em Y
+      rx.set(-dy * 18)  // mouse → cima/baixo inclina em X
+    }
+    window.addEventListener("mousemove", onMove, { passive: true })
+    return () => window.removeEventListener("mousemove", onMove)
+  }, [rx, ry])
+
+  return (
+    <div ref={ref} className="yy-scene relative w-[420px] h-[420px] lg:w-[620px] lg:h-[620px]" style={{ WebkitMaskImage: "radial-gradient(closest-side at 40% 50%, black 25%, transparent 100%)", maskImage: "radial-gradient(closest-side at 40% 50%, black 25%, transparent 100%)" }}>
+      <motion.div className="yy-space absolute inset-0" style={{ rotateX: rx, rotateY: ry }}>
+        {/* aura pulsante (fora do tilt 3D, fica no plano de fundo) */}
+        <div className="yy-aura absolute inset-[-14%] rounded-full bg-[radial-gradient(closest-side,rgba(10,10,10,0.10),rgba(10,10,10,0.04)_48%,transparent_72%)] blur-2xl" />
+
+        {/* planeta: disco yin-yang deitado (rotateX 62°), girando no eixo Z local */}
+        <div className="yy-planet absolute inset-[12%]" aria-hidden>
+          <div className="yy-planet-spin absolute inset-0">
+            <YinYang size={0} className="w-full h-full block text-[#0A0A0A] opacity-[0.05]" animate={false} stroke />
+          </div>
+          {/* sombra do lado yin (baixo) — volume fake */}
+          <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_78%,rgba(10,10,10,0.06),transparent_55%)]" />
+          {/* specular sutil do lado yang (cima) */}
+          <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_22%,rgba(255,255,255,0.18),transparent_45%)]" />
+        </div>
+
+        {/* anel 1 — no plano do planeta, porém largo, traço deslizante */}
+        <svg viewBox="0 0 200 200" className="yy-planet absolute inset-0 w-full h-full text-[#0A0A0A]">
+          <circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" strokeWidth="0.7" opacity="0.18" strokeDasharray="40 260" strokeLinecap="round" className="yy-dash" />
+          <circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.10" strokeDasharray="1 7" />
+        </svg>
+
+        {/* anel 2 — inclinação inversa (cruza o planeta como Saturno) */}
+        <div className="yy-ring2 absolute inset-[4%]">
+          <svg viewBox="0 0 200 200" className="yy-ring2-spin absolute inset-0 w-full h-full text-[#0A0A0A]">
+            <circle cx="100" cy="100" r="86" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.16" strokeDasharray="60 300" strokeLinecap="round" />
+            <circle cx="186" cy="100" r="1.8" fill="currentColor" opacity="0.32" />
+            <circle cx="14" cy="100" r="1.8" fill="currentColor" opacity="0.32" />
+          </svg>
+        </div>
+
+        {/* sombra projetada sob o planeta (no "chão" 3D) */}
+        <div className="yy-ground-shadow absolute left-[18%] right-[18%] bottom-[6%] h-[10%] rounded-[50%] bg-black/[0.08] blur-xl" />
+      </motion.div>
+    </div>
   )
 }
 
@@ -101,6 +165,41 @@ const SECTIONS: { id: string; label: string; icon: React.ReactNode }[] = [
   { id: "contato", label: "Contato", icon: (<><rect x="3.5" y="6" width="17" height="12" rx="2.5" /><path d="m5 8.5 7 5 7-5" /></>) },
 ]
 
+// ── processo (manifesto) ────────────────────────────────────────
+// <ol> semântico, data-driven; um único separador por etapa que gira
+// via CSS (vertical no mobile, horizontal no desktop).
+const PROCESS_STEPS = ["Pensar", "Construir", "Validar", "Entregar", "Evoluir"]
+
+function ProcessSteps() {
+  return (
+    <ol
+      aria-label="Processo de trabalho"
+      className="flex w-full flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center"
+    >
+      {PROCESS_STEPS.map((step, i) => (
+        <Fragment key={step}>
+          {i > 0 && (
+            <li aria-hidden="true" className="grid place-items-center select-none">
+              <span className="block rotate-90 text-black/20 leading-none sm:rotate-0">→</span>
+            </li>
+          )}
+          <li>
+            <span
+              className={`block rounded-full px-4 py-2 text-[12px] font-medium ${
+                i % 2 === 0
+                  ? "bg-[#0A0A0A] text-white"
+                  : "border border-black/10 bg-white text-[#0A0A0A]"
+              }`}
+            >
+              {step}
+            </span>
+          </li>
+        </Fragment>
+      ))}
+    </ol>
+  )
+}
+
 // ── main ──────────────────────────────────────────────────────
 export default function App() {
   const [activeSection, setActiveSection] = useState("")
@@ -147,7 +246,7 @@ export default function App() {
     return () => document.removeEventListener("click", onClick)
   }, [])
 
-  // loader: dispensa quando página+fontes prontas (mín 600ms de intro, teto 2s)
+  // loader: dispensa quando página+fontes prontas (mín 800ms de intro, teto 2s)
   useEffect(() => {
     const start = performance.now()
     let finished = false
@@ -223,7 +322,7 @@ export default function App() {
               <YinYang size={96} animate={true} />
             </motion.div>
             <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.10 }} className="mt-6 font-mono text-[11px] tracking-[0.28em] text-white/60 uppercase">
-              Marcus Pereira — Yin Yang
+              Marcus Pereira — Portifólio
             </motion.p>
             <motion.div className="mt-8 h-px w-24 bg-white/15 overflow-hidden">
               <motion.div initial={{ x: "-100%" }} animate={{ x: "0%" }} transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }} className="h-full w-full bg-white" />
@@ -275,15 +374,11 @@ export default function App() {
         {/* NOTA: sem classes -translate-*: o motion escreve `transform` inline,
             que no Tailwind v3 anulava o translate da classe. No v4 o translate
             comporia com o transform e deslocaria o fundo — removido p/ manter o original. */}
-        <motion.div style={{ y: heroY, scale: heroScale, rotate: heroRotate, opacity: heroOpacity }} className="pointer-events-none absolute left-1/2 top-[52%] select-none">
-          <div className="relative">
-            <YinYangOutline size={860} className="hidden lg:block text-[#0A0A0A]" />
-            <YinYangOutline size={560} className="hidden md:block lg:hidden text-[#0A0A0A]" />
-            <YinYangOutline size={360} className="md:hidden text-[#0A0A0A]" />
-            <div className="absolute top-0 left-0 right-0 bottom-0 grid place-items-center">
-              <YinYang size={280} className="hidden lg:block opacity-[0.07]" animate={true} />
-            </div>
-          </div>
+        <motion.div
+          style={{ y: heroY, scale: heroScale, rotate: heroRotate, opacity: heroOpacity }}
+          className="pointer-events-none absolute select-none hidden md:block md:right-[-4vw] md:top-[8%] lg:right-[30vw] lg:top-[4%]"
+        >
+          <YinYangPlanet />
         </motion.div>
 
         {/* grain */}
@@ -331,7 +426,7 @@ export default function App() {
             <div className="mt-6 md:mt-8 grid lg:grid-cols-[1.15fr_0.85fr] gap-6 md:gap-8 items-end">
               <Reveal delay={0.2}>
                 <p className="text-[18px] md:text-[20px] leading-[1.45] text-balance max-w-[58ch] text-black/70">
-                  <span className="text-[#0A0A0A] font-medium">Desenvolvedor Full Stack</span> há 8+ anos. Transito entre <em className="font-serif italic">backend e frontend</em>, dados e automação, produto e operação — com a calma de quem sabe que <span className="inline-flex items-center gap-1.5 align-middle"><span className="w-2 h-2 rounded-full bg-[#0A0A0A]" /> estabilidade</span> e <span className="inline-flex items-center gap-1.5 align-middle"><span className="w-2 h-2 rounded-full bg-white border border-black/20" /> movimento</span> precisam coexistir.
+                  <span className="text-[#0A0A0A] font-medium">Desenvolvedor Full Stack</span> há 8+ anos. Transito entre <em className="font-serif italic">backend e frontend</em>, dados e automação, produto e operação — equilibrando estabilidade e evolução.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <MagneticButton href="#projetos" variant="dark">Ver projetos <span>↗</span></MagneticButton>
@@ -354,11 +449,14 @@ export default function App() {
                   <div className="mt-5 grid grid-cols-2 gap-3 text-[13px] leading-relaxed">
                     <div className="rounded-2xl bg-white/[0.07] border border-white/10 p-4">
                       <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-white/50">Yin — Estrutura</p>
-                      <p className="mt-1 font-medium">APIs estáveis, filas, dados, observabilidade. O que sustenta.</p>
+                      <p className="mt-1 font-medium">APIs estáveis, filas, dados, observabilidade. 
+                        <p className="mt-2 font-mono text-[8px] tracking-[0.16em] uppercase text-white/50">O que sustenta.</p>
+                      </p>
                     </div>
                     <div className="rounded-2xl bg-white text-[#0A0A0A] p-4">
                       <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-black/50">Yang — Movimento</p>
-                      <p className="mt-1 font-medium">Interfaces, automação, entrega. O que transforma.</p>
+                      <p className="mt-1 font-medium">Interfaces, automação, entrega.</p>
+                      <p className="mt-2 font-mono text-[8px] tracking-[0.16em] uppercase text-black/50"> O que transforma.</p>
                     </div>
                   </div>
                   <div className="mt-5 flex items-center gap-3 text-[12px] text-white/60">
@@ -373,9 +471,9 @@ export default function App() {
           <Reveal delay={0.32}>
             <div className="mt-10 md:mt-12 grid grid-cols-3 divide-x divide-black/10 rounded-[20px] bg-white border border-black/[0.06] overflow-hidden">
               {[
-                ["8+", "anos", "de SDLC"],
+                ["30+", "robôs", "em produção"],
                 ["3", "empresas", "do estágio à sociedade"],
-                ["∞", "robôs", "em produção"],
+                ["1000+", "horas", "economizadas"],
               ].map(([n, l1, l2]) => (
                 <div key={n} className="px-4 md:px-8 py-5 md:py-6 text-center md:text-left">
                   <div className="font-display font-bold text-[28px] md:text-[36px] leading-none tracking-tight">{n}</div>
@@ -444,12 +542,12 @@ export default function App() {
             <div className="space-y-6">
               <Reveal delay={0.06}>
                 <p className="text-[17px] md:text-[18px] leading-[1.7] text-black/70 text-balance">
-                  Sou desenvolvedor de software com mais de <strong className="text-black font-semibold">8 anos</strong> construindo e mantendo aplicações web, APIs e soluções de <strong className="text-black font-semibold">automação (RPA)</strong>. Já atuei do levantamento de requisitos ao deploy e ao on-call — com foco em qualidade, estabilidade e observabilidade.
+                  Sou desenvolvedor de software com mais de <strong className="text-black font-semibold">8 anos</strong> construindo e mantendo aplicações <strong className="text-black font-semibold">Web, APIs e soluções de automação (RPA)</strong>. Atuo de ponta a ponta no ciclo de desenvolvimento, desde o levantamento de requisitos e desenho de soluções até o deploy e o suporte em produção (on-call) — com foco em qualidade, estabilidade, observabilidade e evolução contínua dos sistemas.
                 </p>
                 <p className="mt-4 text-[15px] leading-[1.75] text-black/60">
-                  Hoje sou sócio na <strong className="text-black">Aurea Robotics</strong>, onde evoluo serviços backend em Python com <code className="rounded bg-black text-white px-1.5 py-0.5 font-mono text-[12px]">Redis Streams</code> consumidos por múltiplos robôs por processo (ex.: <code className="font-mono text-[12px]">payroll_queue</code>), APIs REST, dashboards operacionais e toda a camada de infra com Docker/Kubernetes.
+                  Hoje sou sócio na <strong className="text-black">Aurea Robotics</strong>, onde atuo no desenvolvimento das soluções de automação e dos sistemas que dão suporte à operação. Desenvolvo os robôs e serviços backend, além de APIs, interfaces Web, dashboards e relatórios para acompanhamento das automações e seus resultados. Também sou responsável pela infraestrutura e pelos processos de entrega e operação dos serviços.
                 </p>
-              </Reveal>
+              </Reveal> 
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <Reveal delay={0.1}>
@@ -467,14 +565,10 @@ export default function App() {
                   </div>
                 </Reveal>
               </div>
-
               <Reveal delay={0.2}>
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-[#0A0A0A] text-white px-4 py-2 text-[12px] font-medium">Clean Architecture · Hexagonal</span>
-                  <span className="rounded-full border border-black/15 px-4 py-2 text-[12px] font-medium">TDD · pytest</span>
-                  <span className="rounded-full border border-black/15 px-4 py-2 text-[12px] font-medium">SDLC completo</span>
-                </div>
+                <ProcessSteps />
               </Reveal>
+
             </div>
           </div>
 
@@ -620,7 +714,7 @@ export default function App() {
           <div className="mt-10 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {stackGroups.map((g, i) => (
               <Reveal key={g.label} delay={i * 0.05}>
-                <div className="group relative rounded-[24px] bg-white/[0.06] border border-white/10 p-6 hover:bg-white/[0.08] transition h-full overflow-hidden">
+                <div className="group relative rounded-[24px] bg-white/[0.06] border border-white/10 p-6 hover:bg-white/[0.08] transition h-full overflow-hidden flex flex-col">
                   <div className="absolute right-4 top-4 opacity-20 group-hover:opacity-30 transition"><YinYang size={28} animate={false} /></div>
                   <div className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-white" />
@@ -632,14 +726,21 @@ export default function App() {
                       <span key={it} className="rounded-full bg-white text-[#0A0A0A] px-3 py-1.5 text-[12px] font-medium">{it}</span>
                     ))}
                   </div>
-                  <div className="mt-5 h-px bg-white/10" />
+
+                  {/* Linha fixa no final do card  */}
+                  <div className="mt-auto pt-5 ">
+                    <div className="h-px bg-white/10" />
+                  </div>
+
                   <div className="mt-3 flex items-center gap-2 font-mono text-[10px] tracking-[0.14em] uppercase text-white/35">
-                    <span className="w-6 h-px bg-white/20" /> Yin Yang — complementaridade
+                    <span className="w-6 h-px bg-white/20" />
+                      Yin Yang — complementaridade
                   </div>
                 </div>
               </Reveal>
             ))}
           </div>
+          
 
           <Reveal delay={0.22}>
             <div className="mt-6 rounded-[24px] bg-white text-[#0A0A0A] p-6 md:p-7 grid md:grid-cols-[auto_1fr_auto] gap-6 items-center">
@@ -718,7 +819,7 @@ export default function App() {
                 <span className="w-10 h-10 rounded-full bg-[#0A0A0A] text-white grid place-items-center shrink-0"><YinYang size={20} animate={false} /></span>
                 <div>
                   <p className="font-display font-semibold">Quer ver código, arquitetura ou bastidores?</p>
-                  <p className="text-[13px] text-black/60">Posso compartilhar cases com diagramas, decisões e trade-offs — é onde o yin yang aparece de verdade.</p>
+                  <p className="text-[13px] text-black/60">Posso compartilhar cases com diagramas, decisões e trade-offs</p>
                 </div>
               </div>
               <a href="mailto:marcusvfpereira@gmail.com?subject=Portfólio%20—%20conversa%20sobre%20projeto" className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#0A0A0A] text-white px-6 py-3 text-[13px] font-medium hover:bg-black transition">
@@ -753,7 +854,7 @@ export default function App() {
                 </span>
                 <span className="ml-auto opacity-40 group-hover:opacity-100 transition">↗</span>
               </a>
-              <a href="tel:+5521964644433" className="flex items-center gap-4 rounded-2xl bg-white border border-black/10 p-4 hover:border-black/20 transition group">
+              <a href="https://wa.me/5521964644433?text=Olá!%20Gostaria%20de%20saber%20mais." target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 rounded-2xl bg-white border border-black/10 p-4 hover:border-black/20 transition group">
                 <span className="w-11 h-11 rounded-full bg-white border border-black/10 grid place-items-center shrink-0">☎</span>
                 <span>
                   <span className="block font-mono text-[11px] tracking-[0.14em] uppercase text-black/40">Telefone / WhatsApp</span>
@@ -811,7 +912,7 @@ export default function App() {
                   <ol className="mt-3 space-y-2 text-[13px] leading-relaxed text-white/75">
                     <li className="flex gap-2.5"><span className="font-mono text-white/30">01</span> Você me conta contexto, restrições e objetivo.</li>
                     <li className="flex gap-2.5"><span className="font-mono text-white/30">02</span> Eu volto com perguntas boas, um plano e uma estimativa honesta.</li>
-                    <li className="flex gap-2.5"><span className="font-mono text-white/30">03</span> A gente equilibra — yin e yang — até shippar.</li>
+                    <li className="flex gap-2.5"><span className="font-mono text-white/30">03</span> A gente equilibra até shippar.</li>
                   </ol>
                 </div>
               </Reveal>
@@ -854,7 +955,8 @@ export default function App() {
                 aria-current={active ? true : undefined}
                 className={`flex shrink-0 items-center gap-2 rounded-full px-2.5 py-2 text-[12px] font-medium overflow-hidden ${active ? "bg-[#0A0A0A] text-white" : "text-black/50 active:bg-black/[0.06]"}`}
               >
-                <TabIcon className="w-[18px] h-[18px] shrink-0">{s.icon}</TabIcon>
+                <TabIcon className="w-6 h-6 md:w-7 md:h-7 shrink-0">{s.icon}</TabIcon>
+
                 <AnimatePresence initial={false}>
                   {active && (
                     <motion.span
