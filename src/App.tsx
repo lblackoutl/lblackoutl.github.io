@@ -121,12 +121,21 @@ function Reveal({ children, delay = 0, className = "", once = false }: { childre
 }
 
 function MagneticButton({ children, href, variant = "dark" }: { children: React.ReactNode; href?: string; variant?: "dark" | "light" | "ghost" }) {
-  const [pos, setPos] = useState({ x: 0, y: 0 })
+  // motion values (sem setState): o mousemove escreve direto no motion value
+  // e o spring roda fora do React — zero re-renders por pixel (mesmo padrão do YinYangPlanet).
+  const mx = useMotionValue(0)
+  const my = useMotionValue(0)
+  const x = useSpring(mx, { stiffness: 280, damping: 18 })
+  const y = useSpring(my, { stiffness: 280, damping: 18 })
   const handleMove = (e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setPos({ x: (e.clientX - r.left - r.width / 2) * 0.32, y: (e.clientY - r.top - r.height / 2) * 0.32 })
+    mx.set((e.clientX - r.left - r.width / 2) * 0.32)
+    my.set((e.clientY - r.top - r.height / 2) * 0.32)
   }
-  const handleLeave = () => setPos({ x: 0, y: 0 })
+  const handleLeave = () => {
+    mx.set(0)
+    my.set(0)
+  }
   const base = "inline-flex items-center gap-2 rounded-full text-[13px] font-medium tracking-wide px-6 py-[13px] transition-colors"
   const styles = {
     dark: "bg-[#0A0A0A] text-[#FAFAF8] hover:bg-[#1a1a1a]",
@@ -137,7 +146,7 @@ function MagneticButton({ children, href, variant = "dark" }: { children: React.
   return (
     <motion.div
       onMouseMove={handleMove} onMouseLeave={handleLeave}
-      animate={{ x: pos.x, y: pos.y }} transition={{ type: "spring", stiffness: 280, damping: 18 }}
+      style={{ x, y }}
       className="inline-block"
     >
       <Comp href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel={href?.startsWith("http") ? "noreferrer" : undefined} className={`${base} ${styles[variant]}`}>
@@ -148,6 +157,69 @@ function MagneticButton({ children, href, variant = "dark" }: { children: React.
 }
 
 // ── mobile tab bar ──────────────────────────────────────────────
+// Componente isolado: o scroll-spy mora aqui, então cada troca de seção
+// re-renderiza só a pílula — não a página inteira (mesmo visual).
+function MobileTabBar() {
+  const [activeSection, setActiveSection] = useState("")
+
+  // scroll spy — vence a seção com maior visibilidade na faixa central
+  // da tela (evita piscar entre seções no scroll rápido).
+  // Guarda funcional: só troca de estado se a vencedora mudou.
+  useEffect(() => {
+    const ratios = new Map<string, number>()
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          ratios.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0)
+        }
+        let best = ""
+        let bestRatio = 0
+        ratios.forEach((ratio, id) => {
+          if (ratio > bestRatio) {
+            bestRatio = ratio
+            best = id
+          }
+        })
+        if (best) setActiveSection((prev) => (prev === best ? prev : best))
+      },
+      { rootMargin: "-40% 0px -55% 0px", threshold: [0, 0.5, 1] }
+    )
+    SECTIONS.forEach(({ id }) => {
+      const el = document.getElementById(id)
+      if (el) observer.observe(el)
+    })
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <nav aria-label="Navegação principal" className="md:hidden fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-1.5rem)]">
+      <div className="flex items-center gap-1 rounded-full bg-white/85 border border-black/[0.06] shadow-[0_12px_40px_rgba(0,0,0,0.14)] p-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ WebkitBackdropFilter: 'blur(14px)', backdropFilter: 'blur(14px)' }}>
+        {SECTIONS.map((s) => {
+          const active = activeSection === s.id
+          return (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              data-instant
+              aria-label={s.label}
+              aria-current={active ? true : undefined}
+              className={`flex shrink-0 items-center rounded-full px-2.5 py-2 text-[12px] font-medium overflow-hidden transition-colors duration-200 ${active ? "bg-[#0A0A0A] text-white gap-2" : "text-black/50 gap-0 active:bg-black/[0.06]"}`}
+            >
+              <TabIcon className="w-6 h-6 md:w-7 md:h-7 shrink-0">{s.icon}</TabIcon>
+
+              <span
+                aria-hidden={active ? undefined : true}
+                className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${active ? "max-w-[90px] opacity-100" : "max-w-0 opacity-0"}`}
+              >
+                {s.label}
+              </span>
+            </a>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
 function TabIcon({ children, className = "w-5 h-5 shrink-0" }: { children: React.ReactNode; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
@@ -169,14 +241,14 @@ const SECTIONS: { id: string; label: string; icon: React.ReactNode }[] = [
 // <ol> semântico, data-driven; um único separador por etapa que gira
 // via CSS (vertical no mobile, horizontal no desktop).
 // Stagger via motion: container dispara, itens entram em cascata.
-const PROCESS_STEPS = ["Pensar", "Construir", "Validar", "Entregar", "Evoluir"]
+const PROCESS_STEPS = ["Entender", "Desenhar", "Construir", "Operar", "Evoluir"]
 
-const processContainer: Variants = {
+const badgesContainer: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
 }
 
-const processItem: Variants = {
+const badgeItem: Variants = {
   hidden: { opacity: 0, y: 12, scale: 0.96 },
   show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
 }
@@ -185,7 +257,7 @@ function ProcessSteps() {
   return (
     <motion.ol
       aria-label="Processo de trabalho"
-      variants={processContainer}
+      variants={badgesContainer}
       initial="hidden"
       whileInView="show"
       viewport={{ once: false, margin: "-40px" }}
@@ -194,11 +266,11 @@ function ProcessSteps() {
       {PROCESS_STEPS.map((step, i) => (
         <Fragment key={step}>
           {i > 0 && (
-            <motion.li variants={processItem} aria-hidden="true" className="grid place-items-center select-none">
+            <motion.li variants={badgeItem} aria-hidden="true" className="grid place-items-center select-none">
               <span className="block rotate-90 text-black/20 leading-none sm:rotate-0">→</span>
             </motion.li>
           )}
-          <motion.li variants={processItem}>
+          <motion.li variants={badgeItem}>
             <span
               className={`block rounded-full px-4 py-2 text-[12px] font-medium ${
                 i % 2 === 0
@@ -217,7 +289,6 @@ function ProcessSteps() {
 
 // ── main ──────────────────────────────────────────────────────
 export default function App() {
-  const [activeSection, setActiveSection] = useState("")
   const [loaderDone, setLoaderDone] = useState(false)
   const heroRef = useRef<HTMLElement>(null)
   const { scrollYProgress } = useScroll()
@@ -286,33 +357,7 @@ export default function App() {
     }
   }, [])
 
-  // scroll spy p/ a tab bar mobile — vence a seção com maior visibilidade
-  // na faixa central da tela (evita piscar entre seções no scroll rápido)
-  useEffect(() => {
-    const ratios = new Map<string, number>()
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          ratios.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0)
-        }
-        let best = ""
-        let bestRatio = 0
-        ratios.forEach((ratio, id) => {
-          if (ratio > bestRatio) {
-            bestRatio = ratio
-            best = id
-          }
-        })
-        if (best) setActiveSection(best)
-      },
-      { rootMargin: "-40% 0px -55% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] }
-    )
-    SECTIONS.forEach(({ id }) => {
-      const el = document.getElementById(id)
-      if (el) observer.observe(el)
-    })
-    return () => observer.disconnect()
-  }, [])
+  // scroll spy da tab bar mobile: ver MobileTabBar (estado isolado p/ não re-renderizar o App)
 
   // hero parallax
   const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] })
@@ -502,9 +547,8 @@ export default function App() {
         {/* marquee */}
         <div className="mt-8 border-y border-black/10 bg-[#0A0A0A] text-[#FAFAF8] overflow-hidden">
           <div className="relative flex">
-            <motion.div
-              className="flex shrink-0 items-center gap-6 py-3 font-mono text-[12px] tracking-[0.18em] uppercase whitespace-nowrap"
-              animate={{ x: ["0%", "-50%"] }} transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
+            <div
+              className="yy-marquee flex shrink-0 items-center gap-6 py-3 font-mono text-[12px] tracking-[0.18em] uppercase whitespace-nowrap"
             >
               {Array.from({ length: 8 }).map((_, i) => (
                 <span key={i} className="flex items-center gap-6">
@@ -512,11 +556,10 @@ export default function App() {
                   <span className="grid place-items-center w-5 h-5 rounded-full bg-white text-black"><span className="scale-[0.55]"><YinYang size={20} animate={false} /></span></span>
                 </span>
               ))}
-            </motion.div>
-            <motion.div
-              className="flex shrink-0 items-center gap-6 py-3 font-mono text-[12px] tracking-[0.18em] uppercase whitespace-nowrap"
+            </div>
+            <div
+              className="yy-marquee flex shrink-0 items-center gap-6 py-3 font-mono text-[12px] tracking-[0.18em] uppercase whitespace-nowrap"
               aria-hidden
-              animate={{ x: ["0%", "-50%"] }} transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
             >
               {Array.from({ length: 8 }).map((_, i) => (
                 <span key={`2-${i}`} className="flex items-center gap-6">
@@ -524,7 +567,7 @@ export default function App() {
                   <span className="grid place-items-center w-5 h-5 rounded-full bg-white text-black"><span className="scale-[0.55]"><YinYang size={20} animate={false} /></span></span>
                 </span>
               ))}
-            </motion.div>
+            </div>
           </div>
         </div>
       </section>
@@ -590,10 +633,8 @@ export default function App() {
             <div className="mt-10 md:mt-14 flex items-center gap-5" aria-hidden>
               <div className="h-px flex-1 bg-gradient-to-r from-transparent via-black/10 to-black/20" />
               <span className="relative grid place-items-center">
-                <motion.span
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
-                  className="absolute -inset-2 rounded-full border border border-black/15"
+                <span
+                  className="yy-spin-slow absolute -inset-2 rounded-full border border-black/15"
                 />
                 <span className="grid place-items-center w-9 h-9 rounded-full border border-black/10 bg-black shadow-[0_8px_24px_rgba(0,0,0,0.10)]">
                   <YinYang size={22} animate={true} />
@@ -944,7 +985,7 @@ export default function App() {
       </section>
 
       <footer className="bg-[#FAFAF8] border-t border-black/5">
-        <div className="mx-auto max-w-[1280px] px-5 md:px-8 py-6 flex flex-col md:flex-row items-center justify-between gap-3 text-[12px] text-black/45">
+        <div className="mx-auto max-w-[1280px] px-5 md:px-8 py-6 flex flex-col md:flex-row items-center justify-between gap-3 text-[12px] text-black/65">
           <span className="inline-flex items-center gap-2 font-mono">
             <YinYang size={16} animate={false} /> © 2026 Marcus Vinicius Farias Pereira · Feito com equilíbrio.
           </span>
@@ -953,41 +994,7 @@ export default function App() {
       </footer>
 
       {/* mobile tab bar — pílula flutuante: ícone sempre, nome só na aba ativa (salto direto via data-instant) */}
-      <nav aria-label="Navegação principal" className="md:hidden fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-1.5rem)]">
-        <div className="flex items-center gap-1 rounded-full bg-white/85 border border-black/[0.06] shadow-[0_12px_40px_rgba(0,0,0,0.14)] p-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ WebkitBackdropFilter: 'blur(14px)', backdropFilter: 'blur(14px)' }}>
-          {SECTIONS.map((s) => {
-            const active = activeSection === s.id
-            return (
-              <motion.a
-                key={s.id}
-                href={`#${s.id}`}
-                data-instant
-                layout
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                aria-label={s.label}
-                aria-current={active ? true : undefined}
-                className={`flex shrink-0 items-center gap-2 rounded-full px-2.5 py-2 text-[12px] font-medium overflow-hidden ${active ? "bg-[#0A0A0A] text-white" : "text-black/50 active:bg-black/[0.06]"}`}
-              >
-                <TabIcon className="w-6 h-6 md:w-7 md:h-7 shrink-0">{s.icon}</TabIcon>
-
-                <AnimatePresence initial={false}>
-                  {active && (
-                    <motion.span
-                      initial={{ width: 0, opacity: 0 }}
-                      animate={{ width: "auto", opacity: 1 }}
-                      exit={{ width: 0, opacity: 0 }}
-                      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                      className="whitespace-nowrap overflow-hidden"
-                    >
-                      {s.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.a>
-            )
-          })}
-        </div>
-      </nav>
+      <MobileTabBar />
       {/* respiro p/ a tab bar não cobrir o rodapé no mobile */}
       <div className="h-[76px] md:hidden" aria-hidden />
     </div>
