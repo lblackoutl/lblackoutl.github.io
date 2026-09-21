@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react"
-import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence, useMotionValue } from "motion/react"
+import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence, useMotionValue, type Variants } from "motion/react"
 import Lenis from "lenis"
 import { experiences, stackGroups, projects, education } from "./data"
 
@@ -168,22 +168,37 @@ const SECTIONS: { id: string; label: string; icon: React.ReactNode }[] = [
 // ── processo (manifesto) ────────────────────────────────────────
 // <ol> semântico, data-driven; um único separador por etapa que gira
 // via CSS (vertical no mobile, horizontal no desktop).
+// Stagger via motion: container dispara, itens entram em cascata.
 const PROCESS_STEPS = ["Pensar", "Construir", "Validar", "Entregar", "Evoluir"]
+
+const processContainer: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+}
+
+const processItem: Variants = {
+  hidden: { opacity: 0, y: 12, scale: 0.96 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
+}
 
 function ProcessSteps() {
   return (
-    <ol
+    <motion.ol
       aria-label="Processo de trabalho"
+      variants={processContainer}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: false, margin: "-40px" }}
       className="flex w-full flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center"
     >
       {PROCESS_STEPS.map((step, i) => (
         <Fragment key={step}>
           {i > 0 && (
-            <li aria-hidden="true" className="grid place-items-center select-none">
+            <motion.li variants={processItem} aria-hidden="true" className="grid place-items-center select-none">
               <span className="block rotate-90 text-black/20 leading-none sm:rotate-0">→</span>
-            </li>
+            </motion.li>
           )}
-          <li>
+          <motion.li variants={processItem}>
             <span
               className={`block rounded-full px-4 py-2 text-[12px] font-medium ${
                 i % 2 === 0
@@ -193,10 +208,10 @@ function ProcessSteps() {
             >
               {step}
             </span>
-          </li>
+          </motion.li>
         </Fragment>
       ))}
-    </ol>
+    </motion.ol>
   )
 }
 
@@ -565,9 +580,7 @@ export default function App() {
                   </div>
                 </Reveal>
               </div>
-              <Reveal delay={0.2}>
-                <ProcessSteps />
-              </Reveal>
+              <ProcessSteps />
 
             </div>
           </div>
