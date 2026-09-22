@@ -4,18 +4,18 @@
   --font-display: "Bricolage Grotesque", system-ui, sans-serif;
   --font-serif: "Instrument Serif", serif;
   --font-mono: "JetBrains Mono", monospace;
+  --color-ink: #0A0A0A;
+  --color-paper: #FAFAF8;
 }
 
 :root {
-  --ink: #0A0A0A;
-  --paper: #FAFAF8;
   scroll-behavior: auto;
 }
 
 html {
   scroll-behavior: auto;
   scrollbar-width: thin;
-  scrollbar-color: #0A0A0A #FAFAF8;
+  scrollbar-color: var(--color-ink) var(--color-paper);
   scrollbar-gutter: stable;
 }
 
@@ -28,18 +28,18 @@ html.lenis, html.lenis body { height: auto; }
 
 body {
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--color-paper);
+  color: var(--color-ink);
   overflow-x: hidden;
 }
 
 /* custom scrollbar webkit */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #FAFAF8; }
-::-webkit-scrollbar-thumb { background: #0A0A0A; border-radius: 999px; }
+::-webkit-scrollbar-track { background: var(--color-paper); }
+::-webkit-scrollbar-thumb { background: var(--color-ink); border-radius: 999px; }
 
 /* selection */
-::selection { background: #0A0A0A; color: #FAFAF8; }
+::selection { background: var(--color-ink); color: var(--color-paper); }
 
 /* yin-yang spin (CSS em vez de JS: mesma rotação 36s, sem custo por frame) */
 @keyframes yy-spin { to { transform: rotate(360deg); } }
